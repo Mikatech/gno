@@ -522,7 +522,7 @@ func UverseNode() *PackageNode {
 								if etv.IsUndefined() {
 									continue
 								}
-								erv := gno2GoValue(etv, reflect.Value{})
+								erv := gno2GoValue(etv, reflect.Value{}, make(map[*TypedValue]struct{}))
 								newNativeArg1Slice.Index(i).Set(erv)
 							}
 						} else {
@@ -733,7 +733,7 @@ func UverseNode() *PackageNode {
 				return
 			case *NativeType:
 				krv := reflect.New(cbt.Type.Key()).Elem()
-				krv = gno2GoValue(&itv, krv)
+				krv = gno2GoValue(&itv, krv, make(map[*TypedValue]struct{}))
 				mrv := arg0.TV.V.(*NativeValue).Value
 				mrv.SetMapIndex(krv, reflect.Value{})
 				return

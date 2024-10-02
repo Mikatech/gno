@@ -217,8 +217,8 @@ func (pv PointerValue) Assign2(alloc *Allocator, store Store, rlm *Realm, tv2 Ty
 		rv := pv.Base.(*NativeValue).Value
 		if rv.Kind() == reflect.Map { // go native object
 			// assign value to map directly.
-			krv := gno2GoValue(pv.Key, reflect.Value{})
-			vrv := gno2GoValue(&tv2, reflect.Value{})
+			krv := gno2GoValue(pv.Key, reflect.Value{}, make(map[*TypedValue]struct{}))
+			vrv := gno2GoValue(&tv2, reflect.Value{}, make(map[*TypedValue]struct{}))
 			rv.SetMapIndex(krv, vrv)
 		} else {
 			// assign depending on pv.TV type.
@@ -2082,7 +2082,7 @@ func (tv *TypedValue) GetPointerAtIndex(alloc *Allocator, store Store, iv *Typed
 				*/
 			}
 		case reflect.Map:
-			krv := gno2GoValue(iv, reflect.Value{})
+			krv := gno2GoValue(iv, reflect.Value{}, make(map[*TypedValue]struct{}))
 			vrv := rv.MapIndex(krv)
 			etv := go2GnoValue(alloc, vrv) // NOTE: lazy, often native.
 			return PointerValue{

@@ -338,7 +338,7 @@ func (m *Machine) doOpReturnCallDefers() {
 		for i := 0; i < len(prvs); i++ {
 			// TODO consider when declared types can be
 			// converted, e.g. fmt.Println. See GoValue.
-			prvs[i] = gno2GoValue(&ptvs[i], reflect.Value{})
+			prvs[i] = gno2GoValue(&ptvs[i], reflect.Value{}, make(map[*TypedValue]struct{}))
 		}
 		// Call and ignore results.
 		fv.Value.Call(prvs)

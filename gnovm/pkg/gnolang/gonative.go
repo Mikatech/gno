@@ -324,7 +324,7 @@ func Go2GnoNativeValue(alloc *Allocator, rv reflect.Value) (tv TypedValue) {
 
 // NOTE: used by imports_test.go TestSetOrigCaller.
 func Gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
-	return gno2GoValue(tv, rv)
+	return gno2GoValue(tv, rv, make(map[*TypedValue]struct{}))
 }
 
 // Default run-time representation of go-native values.  It is
@@ -557,7 +557,7 @@ func go2GnoValueUpdate(alloc *Allocator, rlm *Realm, lvl int, tv *TypedValue, rv
 			}
 		}
 	case PointerKind:
-		if tv.V == nil {
+		if tv.V == nil || rv == reflect.ValueOf(nil) {
 			return // do nothing
 		}
 		pv := tv.V.(PointerValue)
@@ -618,7 +618,7 @@ func go2GnoValueUpdate(alloc *Allocator, rlm *Realm, lvl int, tv *TypedValue, rv
 		for head != nil {
 			ktv, vtv := &head.Key, &head.Value
 			// Update in place.
-			krv := gno2GoValue(ktv, reflect.Value{})
+			krv := gno2GoValue(ktv, reflect.Value{}, make(map[*TypedValue]struct{}))
 			vrv := rv.MapIndex(krv)
 			if vrv.IsZero() {
 				// XXX remove key from mv
@@ -1044,7 +1044,7 @@ func gno2GoTypeMatches(t Type, rt reflect.Type) (result bool) {
 // gno.PointerValue). In the latter case, an addressable one will be
 // constructed and returned, otherwise returns rv.  if tv is undefined, rv must
 // be valid.
-func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
+func gno2GoValue(tv *TypedValue, rv reflect.Value, seen map[*TypedValue]struct{}) (ret reflect.Value) {
 	if tv.IsUndefined() {
 		if debug {
 			if !rv.IsValid() {
@@ -1121,7 +1121,7 @@ func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
 			// do nothing
 		} else {
 			rve := reflect.New(rv.Type().Elem()).Elem()
-			rv2 := gno2GoValue(tv.V.(PointerValue).TV, rve)
+			rv2 := gno2GoValue(tv.V.(PointerValue).TV, rve, seen)
 			rv.Set(rv2.Addr())
 		}
 	case *ArrayType:
@@ -1140,7 +1140,7 @@ func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
 				if etv.IsUndefined() {
 					continue
 				}
-				gno2GoValue(etv, rv.Index(i))
+				gno2GoValue(etv, rv.Index(i), seen)
 			}
 		} else {
 			for i := 0; i < ct.Len; i++ {
@@ -1167,7 +1167,7 @@ func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
 				if etv.IsUndefined() {
 					continue
 				}
-				gno2GoValue(etv, rv.Index(i))
+				gno2GoValue(etv, rv.Index(i), seen)
 			}
 		} else {
 			data := make([]byte, svl, svc)
@@ -1179,14 +1179,18 @@ func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
 		if tv.V == nil {
 			return
 		}
+		if _, ok := seen[tv]; ok {
+			return
+		}
 		// General case.
+		seen[tv] = struct{}{}
 		sv := tv.V.(*StructValue)
 		for i := range ct.Fields {
 			ftv := &(sv.Fields[i])
 			if ftv.IsUndefined() {
 				continue
 			}
-			gno2GoValue(ftv, rv.Field(i))
+			gno2GoValue(ftv, rv.Field(i), seen)
 		}
 	case *MapType:
 		// If uninitialized map, return zero value.
@@ -1201,12 +1205,12 @@ func gno2GoValue(tv *TypedValue, rv reflect.Value) (ret reflect.Value) {
 		vrt := mt.Elem()
 		for head != nil {
 			ktv, vtv := &head.Key, &head.Value
-			krv := gno2GoValue(ktv, reflect.Value{})
+			krv := gno2GoValue(ktv, reflect.Value{}, seen)
 			if vtv.IsUndefined() {
 				vrv := reflect.New(vrt).Elem()
 				rv.SetMapIndex(krv, vrv)
 			} else {
-				vrv := gno2GoValue(vtv, reflect.Value{})
+				vrv := gno2GoValue(vtv, reflect.Value{}, seen)
 				rv.SetMapIndex(krv, vrv)
 			}
 			head = head.Next
@@ -1295,10 +1299,10 @@ func (m *Machine) doOpArrayLitGoNative() {
 				// XXX why convert? (also see doOpArrayLit())
 				k := kx.(*ConstExpr).ConvertGetInt()
 				rf := rv.Index(k)
-				gno2GoValue(&itvs[i], rf)
+				gno2GoValue(&itvs[i], rf, make(map[*TypedValue]struct{}))
 			} else {
 				rf := rv.Index(i)
-				gno2GoValue(&itvs[i], rf)
+				gno2GoValue(&itvs[i], rf, make(map[*TypedValue]struct{}))
 			}
 		}
 	}
@@ -1334,10 +1338,10 @@ func (m *Machine) doOpSliceLitGoNative() {
 				// XXX why convert? (also see doOpArrayLit())
 				k := kx.(*ConstExpr).ConvertGetInt()
 				rf := rv.Index(k)
-				gno2GoValue(&itvs[i], rf)
+				gno2GoValue(&itvs[i], rf, make(map[*TypedValue]struct{}))
 			} else {
 				rf := rv.Index(i)
-				gno2GoValue(&itvs[i], rf)
+				gno2GoValue(&itvs[i], rf, make(map[*TypedValue]struct{}))
 			}
 		}
 	}
@@ -1372,7 +1376,7 @@ func (m *Machine) doOpStructLitGoNative() {
 		ftvs := m.PopValues(el)
 		for i := 0; i < el; i++ {
 			rf := rv.Field(i)
-			gno2GoValue(&ftvs[i], rf)
+			gno2GoValue(&ftvs[i], rf, make(map[*TypedValue]struct{}))
 		}
 	} else {
 		// field values are by name and may be out of order.
@@ -1380,7 +1384,7 @@ func (m *Machine) doOpStructLitGoNative() {
 		for i := 0; i < el; i++ {
 			fnx := x.Elts[i].Key.(*NameExpr)
 			rf := rv.FieldByName(string(fnx.Name))
-			gno2GoValue(&ftvs[i], rf)
+			gno2GoValue(&ftvs[i], rf, make(map[*TypedValue]struct{}))
 		}
 	}
 	// construct and push value.
@@ -1420,7 +1424,7 @@ func (m *Machine) doOpCallGoNative() {
 			it = ft.In(i)
 		}
 		erv := reflect.New(it).Elem()
-		prvs = append(prvs, gno2GoValue(ptv, erv))
+		prvs = append(prvs, gno2GoValue(ptv, erv, make(map[*TypedValue]struct{})))
 	}
 	// call and get results.
 	rrvs := []reflect.Value(nil)

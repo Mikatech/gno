@@ -53,7 +53,7 @@ func ConvertTo(alloc *Allocator, store Store, tv *TypedValue, t Type) {
 		if tIsNat {
 			// convert gno to go-native type.
 			rv := reflect.New(nt.Type).Elem()
-			rv = gno2GoValue(tv, rv)
+			rv = gno2GoValue(tv, rv, make(map[*TypedValue]struct{}))
 			if debug {
 				if !rv.Type().ConvertibleTo(nt.Type) {
 					panic(fmt.Sprintf(
