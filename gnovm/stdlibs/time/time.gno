@@ -434,6 +434,10 @@ func (t Time) IsZero() bool {
 	return t.sec() == 0 && t.nsec() == 0
 }
 
+func (t Time) AbsDebug() uint64 {
+	return t.abs()
+}
+
 // abs returns the time t as an absolute time, adjusted by the zone offset.
 // It is called when computing a presentation property like Month or Hour.
 func (t Time) abs() uint64 {
